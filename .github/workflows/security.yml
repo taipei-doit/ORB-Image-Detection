@@ -1,0 +1,74 @@
+# 安全掃描：Trivy（漏洞／設定／機密）與 Semgrep（靜態分析）
+# SARIF 上傳至 Security → Code scanning alerts（需 repo 啟用 Advanced Security 或公開 repo）
+
+name: Security
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy:
+    name: Trivy (filesystem)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: "."
+          scanners: vuln,misconfig,secret
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "1"
+          ignore-unfixed: false
+          limit-severities-for-sarif: true
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && (hashFiles('trivy-results.sarif') != '')
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      # 有問題時以非 0 結束（預設：有命中規則會失敗）；SARIF 仍會寫入供上傳
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --config auto \
+            --sarif \
+            --output semgrep.sarif \
+            .
+
+      - name: Upload Semgrep SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && (hashFiles('semgrep.sarif') != '')
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep

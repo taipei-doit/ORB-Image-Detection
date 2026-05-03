@@ -4,11 +4,11 @@ import os
 import sys
 import shutil
 import ctypes
-import pickle
+import json
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 
-CACHE_FILENAME = ".orb_cache.dat"
+CACHE_FILENAME = ".orb_cache.json"
 
 # 修正 Windows 高 DPI 螢幕模糊問題
 try:
@@ -136,8 +136,8 @@ class ImageDetectionV83:
         if data is None:
             return None
         return {
-            "orb": (self._kp_to_tuple(data["orb"][0]), data["orb"][1]),
-            "akaze": (self._kp_to_tuple(data["akaze"][0]), data["akaze"][1]),
+            "orb": (self._kp_to_tuple(data["orb"][0]), data["orb"][1].tolist() if data["orb"][1] is not None else None),
+            "akaze": (self._kp_to_tuple(data["akaze"][0]), data["akaze"][1].tolist() if data["akaze"][1] is not None else None),
         }
 
     def _deserialize_features(self, data):
@@ -145,8 +145,8 @@ class ImageDetectionV83:
         if data is None:
             return None
         return {
-            "orb": (self._tuple_to_kp(data["orb"][0]), data["orb"][1]),
-            "akaze": (self._tuple_to_kp(data["akaze"][0]), data["akaze"][1]),
+            "orb": (self._tuple_to_kp(data["orb"][0]), np.array(data["orb"][1], dtype=np.uint8) if data["orb"][1] is not None else None),
+            "akaze": (self._tuple_to_kp(data["akaze"][0]), np.array(data["akaze"][1], dtype=np.uint8) if data["akaze"][1] is not None else None),
         }
 
     def _get_cache_path(self):
@@ -158,8 +158,8 @@ class ImageDetectionV83:
         if not os.path.exists(cache_path):
             return {}
         try:
-            with open(cache_path, "rb") as f:
-                raw = pickle.load(f)
+            with open(cache_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
             # 還原 KeyPoint 物件
             result = {}
             for filename, entry in raw.items():
@@ -181,8 +181,8 @@ class ImageDetectionV83:
                 flips[flip_key] = self._serialize_features(fdata)
             raw[filename] = {"path": entry["path"], "flips": flips}
         try:
-            with open(cache_path, "wb") as f:
-                pickle.dump(raw, f)
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(raw, f)
         except Exception:
             pass
 
